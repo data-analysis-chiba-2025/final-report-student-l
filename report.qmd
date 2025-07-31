@@ -1,0 +1,129 @@
+---
+title: "Analysis of Food Consumption and CO2 Emissions"
+author: Student L
+format: docx
+---
+
+```{r}
+#| label: setup
+#| echo: false
+#| message: false
+
+# Load packages
+library(tidyverse)
+library(scales)
+library(dplyr)
+```
+
+## Introduction
+
+The "Food Consumption and CO2 Emissions" dataset includes statistics about different countries and food categories and their individual consumption as well as their CO2 emissions. The official data comes from <https://www.nu3.de/>. I also used the "gapminder" dataset for the population of different countries. Its data comes from the Gapminder website, <https://www.gapminder.org/>.
+
+It’s known that animal-based foods tend to have a higher footprint than plant-based foods. But it’s hard to say to what extent this matters and if different diets can change one’s carbon footprint. So I want to compare different foods and their emissions and also the consumption between different countries (<https://ourworldindata.org/food-choice-vs-eating-local>).
+
+- Is a usual Western diet better for the environment than an East Asian one?
+- Which country emits the most CO2? 
+- Is it fair to only compare the emissions of countries? 
+
+
+## Data visualization
+
+```{r}
+#| echo: false
+#| message: false
+#| fig-height: 3.5
+#| fig-dpi: 500
+food_consumption <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2020/2020-02-18/food_consumption.csv')
+
+gapminder <- read_csv("data_raw/gapminder.csv")
+
+gap_pop <- gapminder |>
+  filter(year == 2007) |>
+  select(country, pop) |>
+  mutate(country = str_replace_all(country, "United States", "USA")) |>
+  mutate(country = str_replace_all(country, "Hong Kong, China", "Hong Kong SAR. China")) |>
+  mutate(country = str_replace_all(country, "Korea, Rep.", "South Korea")) |>
+  mutate(country = str_replace_all(country, "Korea, Dem. Rep.", "North Korea")) |>
+  mutate(country = str_replace_all(country, "Slovak Republic", "Slovakia")) |>
+  mutate(country = str_replace_all(country, "Taiwan", "Taiwan. ROC")) |>
+  mutate(country = str_replace_all(country, "Congo, Dem. Rep.", "Congo"))
+
+co2 <- food_consumption |>
+  left_join(gap_pop, join_by(country))
+
+total_co2 <- co2 |>
+  mutate(total_consumption_mio_t = pop * consumption / 10^9) |>
+  mutate(total_co2_emmission_mio_t = pop * co2_emmission / 10^9) |>
+  mutate(co2_perKg = co2_emmission / consumption)
+
+total_co2_select <- filter(
+  total_co2,
+  country %in% c("China", "Germany", "India", "Japan", "USA", "Nigeria")
+)
+
+ggplot(
+  data = total_co2_select |>
+    filter(food_category %in% c("Beef", "Milk - inc. cheese", "Fish", "Nuts inc. Peanut Butter", "Pork", "Soybeans")),
+  mapping = aes(
+    x = consumption,
+    y = country,
+    color = food_category
+  )
+) +
+  geom_point() +
+  labs(
+    title = "Figure 1",
+    subtitle = "Food consumption per Country",
+    x = "Consumption in Kg per person",
+    y = "Country",
+    color = "Food Category"
+  ) +
+  scale_x_log10()
+```
+
+
+```{r}
+#| echo: false
+#| message: false
+
+total_by_country <- total_co2_select |>
+  filter(country %in% c("China", "Germany", "India", "Japan", "USA", "Nigeria")) |>
+  group_by(country) |>
+  summarise(total_emission = sum(total_co2_emmission_mio_t, na.rm = TRUE)) |>
+  left_join(gap_pop, join_by(country))
+
+ggplot(total_by_country, aes(x = reorder(country, -total_emission), y = total_emission)) +
+  geom_col(fill = "brown") +
+  labs(
+    title = "Figure 2",
+    subtitle = "Total CO2-Emissionen per country",
+    x = "Country",
+    y = "CO2-Emissionen (Mio. tonnes)"
+  ) 
+
+ggplot(total_by_country, aes(x = reorder(country, -total_emission / pop * 1000000), y = total_emission / pop * 1000000)) +
+  geom_col(fill = "brown") +
+  labs(
+    title = "Figure 3",
+    subtitle = "Total CO2-Emissionen per country per capita",
+    x = "Country",
+    y = "CO2-Emissionen in tonnes"
+  ) 
+```
+{{< pagebreak >}}
+## Discussion
+
+Figure 1 shows the different amounts of consumption between countries and varied food categories. It’s clear that in most countries the highest consumption goes to dairy products like milk and cheese followed by meat. On the other end you can see that in most countries nuts and soybeans are among the least consumed products. Especially in the USA, where the difference is clearly visible, compared to eastern countries like Japan or China, where the consumption isn’t so far spread out. It’s important to note that the x-axes are logarithmic, so the differences are even bigger in some countries.
+
+Figure 2 shows the total amount of CO2 emitted by each country through food consumption. It’s clearly visible, that China has by far the highest emission. Even countries like the USA, when compared to other countries like Germany, have a high amount of emission. But in comparison to China, even they seem small. This could lead to the assumption, that the Chinese diet is the worst for our climate.
+
+But Figure 3 shows a completely different distribution. Here the CO2 emission of all foods is calculated per capita. This puts China at the same level as Japan with only around half the amount of CO2 compared to the USA, which now leads the statistic. This shows that the diet and with that the food consumption in Asian countries and even African countries has big advantages compared to western countries when it comes to CO2 emission. The difference between Figure 2 and Figure 3 is that by calculating per capita, we take population into consideration. This helps make the data more comparable, especially if the data includes countries with highly diverse populations like China and Germany. 
+
+If we now consider all figures, we can see that a high consumption of animal-based products emits more CO2 compared to a more vegetable- or soy-based diet. This makes a Western diet, with its high amount of dairy and beef, a worse diet for our climate. This conclusion aligns with other analyses in the field, such as the IPCC report. (<https://www.ipcc.ch/srccl/chapter/chapter-5/>).
+
+
+
+## References
+
+https://ourworldindata.org/food-choice-vs-eating-local
+https://www.ipcc.ch/srccl/chapter/chapter-5/
